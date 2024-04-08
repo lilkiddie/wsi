@@ -14,7 +14,7 @@ class Bert:
         self.config = config
 
         with torch.no_grad():
-            model = AutoModelForMaskedLM.from_pretrained(config.model)
+            model = AutoModelForMaskedLM.from_pretrained(config.model, output_hidden_states=True)
             model.to(self.device)
             model.eval()
 
@@ -31,16 +31,15 @@ class Bert:
                 self.lemmatized_vocab.append(lemma)
                 self.original_vocab.append(token.lower())
 
-    
     def get_formated_sent(self, pre, target, post, pattern):
         replacements = dict(pre=pre, target=target, post=post)
         for predicted_token in ['{mask_predict}', '{target_predict}']:
             if predicted_token in pattern: 
                 before_pred, after_pred = pattern.split(predicted_token)
-                before_pred = ['[CLS]'] + self.tokenizer.tokenize(before_pred.format(**replacements))
-                after_pred = self.tokenizer.tokenize(after_pred.format(**replacements)) + ['[SEP]']
+                before_pred = [self.tokenizer.cls_token] + self.tokenizer.tokenize(before_pred.format(**replacements))
+                after_pred = self.tokenizer.tokenize(after_pred.format(**replacements)) + [self.tokenizer.sep_token]
                 target_prediction_idx = len(before_pred)
-                target_tokens = ['[MASK]'] if predicted_token == '{mask_predict}' else self.tokenizer.tokenize(target)
+                target_tokens = [self.tokenizer.mask_token] if predicted_token == '{mask_predict}' else self.tokenizer.tokenize(target)
                 return before_pred + target_tokens + after_pred, target_prediction_idx
 
     def predict_substitutes(self, inst_id_to_sentence):
@@ -64,7 +63,7 @@ class Bert:
                 input_batch = input_batch.clone().detach().to(self.device)
                 attention_mask = input_batch != 0
 
-                logits = self.model(input_batch, attention_mask=attention_mask)[0]
+                logits = self.model(input_batch, attention_mask=attention_mask).logits
                 targets_logits = logits[range(logits.shape[0]), target_ids, :]
 
                 topk_vals, topk_idxs = torch.topk(targets_logits, self.config.prediction_cutoff, -1)
@@ -98,3 +97,30 @@ class Bert:
 
             return res
         
+    def get_sentence_tokens(self, sent):
+        return [self.tokenizer.cls_token] + self.tokenizer.tokenize(sent) + [self.tokenizer.sep_token]
+
+        
+    def get_sentence_embedding(self, inst_id_to_sentence):
+        res = {}
+        with torch.no_grad():
+            sorted_by_len = sorted(inst_id_to_sentence.items(), key=lambda x: len(x[1][0]) + len(x[1][2]))
+            for batch in get_batch(sorted_by_len, 10):
+                batch_sents = []
+                for _, (pre, target, post) in batch:
+                    tokens = self.get_sentence_tokens(pre + target + post)
+                    batch_sents.append(tokens)
+                
+                tokens_idx = [self.tokenizer.convert_tokens_to_ids(sent_tokens) for sent_tokens in batch_sents]
+                max_len = len(max(tokens_idx, key=lambda x: len(x)))
+                
+                input_batch = torch.zeros((len(tokens_idx), max_len), dtype=torch.long)
+                for idx, row in enumerate(tokens_idx):
+                    input_batch[idx, 0:len(row)] = torch.tensor(row)
+                input_batch = input_batch.clone().detach().to(self.device)
+                attention_mask = input_batch != 0
+                sent_embeddings = self.model(input_batch, attention_mask=attention_mask).hidden_states[-1].mean(dim=1).detach().cpu().numpy()
+                for (inst_id,( _, _, _)), sent_embedding in zip(batch, sent_embeddings):
+                    res[inst_id] = sent_embedding
+
+        return res

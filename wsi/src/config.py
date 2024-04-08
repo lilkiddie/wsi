@@ -14,5 +14,7 @@ DEFAULT_PARAMS = WSISettings(
     min_sense_instances=2,
     max_batch_size=10,
     prediction_cutoff=200,
-    model='cointegrated/rubert-tiny2'
+    # model='ai-forever/ruRoberta-large'
+    # model='cointegrated/rubert-tiny2',
+    model='FacebookAI/xlm-roberta-large'
 )

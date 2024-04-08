@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
-from sklearn.svm import LinearSVC
+from sklearn.cluster import KMeans
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import pdist, cdist
 
@@ -83,3 +83,9 @@ def cluster_inst_ids_representatives(inst_ids_to_representatives: Dict[str, List
         senses[inst_id] = senses_inst
 
     return senses
+
+def kmeans_clustering(inst_ids_to_representatives):
+    collection = sorted(inst_ids_to_representatives.items(), key=lambda x: int(x[0].rsplit('.', 1)[1]))
+    kmeans = KMeans(n_clusters=3, n_init=5)
+    kmeans.fit([x[1] for x in collection])
+    return kmeans.labels_

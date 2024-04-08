@@ -6,6 +6,6 @@ if __name__ == '__main__':
     config = DEFAULT_PARAMS
     model = Bert(config)
     wsi_inductor = WSI_Inductor(model, config)
-
-    ans = wsi_inductor.run('../resources/russe-wsi-kit-fixed_datasets/data/main/bts-rnc')
-    print(f'ARI score: {ans}')
+    agglomerative_score, kmeans_score = wsi_inductor.run('resources/russe-wsi-kit-fixed_datasets/data/main/bts-rnc')
+    print(f'ARI Agglomerative score: {agglomerative_score}')
+    print(f'ARI KMeans score: {kmeans_score}')
